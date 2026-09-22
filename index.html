@@ -2480,17 +2480,20 @@ footer.pg{margin-top:22px;text-align:center;color:var(--ink-3);font-size:12px;li
     if(MODO_PRINT) return;
     $$(".kpi .val.num", scope).forEach(function(el){
       if(el.dataset.done) return;
-      var txt = el.textContent, m = txt.match(/-?[\d.]+,?\d*/);
+      /* o valor final fica guardado em data-final: quem atualiza o numero (o guia, apos uma venda)
+         grava ali, e a animacao sempre termina no valor mais recente */
+      var txt = el.dataset.final || el.textContent, m = txt.match(/-?[\d.]+,?\d*/);
       if(!m) return;
       var alvo = parseFloat(m[0].replace(/\./g,"").replace(",","."));
       if(!isFinite(alvo) || alvo === 0) return;
+      el.dataset.final = txt;
       el.dataset.done = "1";
       if(window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       var casas = (m[0].split(",")[1] || "").length, t0 = performance.now(), dur = 700;
       (function step(t){
         var p = Math.min(1,(t-t0)/dur), v = alvo * (1 - Math.pow(1-p,3));
         el.textContent = txt.replace(m[0], v.toLocaleString("pt-BR",{minimumFractionDigits:casas, maximumFractionDigits:casas}));
-        if(p < 1) requestAnimationFrame(step); else el.textContent = txt;
+        if(p < 1) requestAnimationFrame(step); else el.textContent = el.dataset.final || txt;
       })(t0);
     });
   }
@@ -2777,7 +2780,10 @@ footer.pg{margin-top:22px;text-align:center;color:var(--ink-3);font-size:12px;li
   function num(t){ var s = String(t || "").replace(/[^\d,.\-]/g, ""); return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0; }
   function reais(v, casas){ var c = casas == null ? 2 : casas; return "R$ " + v.toLocaleString("pt-BR", {minimumFractionDigits:c, maximumFractionDigits:c}); }
   var base = {};
-  function captura(sel, chave, casas){ var el = $(sel); if(el) base[chave] = {el:el, v:num(el.textContent), casas:casas}; }
+  /* le o valor final (data-final), e nunca o quadro da animacao de contagem em andamento */
+  function valorFinal(el){ return el.dataset.final || el.textContent; }
+  function escreve(el, texto){ el.textContent = texto; if(el.dataset.final) el.dataset.final = texto; }
+  function captura(sel, chave, casas){ var el = $(sel); if(el) base[chave] = {el:el, v:num(valorFinal(el)), casas:casas}; }
   captura('[data-kpi="vendido"]', "vendido", 2);
   captura('[data-kpi="pedidos"]', "pedidos", 0);
   captura('[data-kpi="balcao"]', "balcao", 0);
@@ -2790,11 +2796,11 @@ footer.pg{margin-top:22px;text-align:center;color:var(--ink-3);font-size:12px;li
   var despEl = $("[data-despachados]"), despBase = despEl ? num(despEl.textContent) : 0;
 
   function aplicar(){
-    if(base.vendido) base.vendido.el.textContent = reais(base.vendido.v + estado.total);
-    if(base.pedidos) base.pedidos.el.textContent = (base.pedidos.v + estado.vendas).toLocaleString("pt-BR");
-    if(base.balcao)  base.balcao.el.textContent  = reais(base.balcao.v + estado.total, 0);
-    if(base.turno)   base.turno.el.textContent   = reais(base.turno.v + estado.total);
-    ["pix","dinheiro","cartao"].forEach(function(k){ if(base[k]) base[k].el.textContent = reais(base[k].v + estado.formas[k]); });
+    if(base.vendido) escreve(base.vendido.el, reais(base.vendido.v + estado.total));
+    if(base.pedidos) escreve(base.pedidos.el, (base.pedidos.v + estado.vendas).toLocaleString("pt-BR"));
+    if(base.balcao)  escreve(base.balcao.el, reais(base.balcao.v + estado.total, 0));
+    if(base.turno)   escreve(base.turno.el, reais(base.turno.v + estado.total));
+    ["pix","dinheiro","cartao"].forEach(function(k){ if(base[k]) escreve(base[k].el, reais(base[k].v + estado.formas[k])); });
     if(nvendasEl) nvendasEl.textContent = (nvendasBase + estado.vendas) + " vendas";
     if(polpaEl){
       var kg = Math.max(0, polpaBase - estado.kgAcai);
@@ -3198,7 +3204,6 @@ footer.pg{margin-top:22px;text-align:center;color:var(--ink-3);font-size:12px;li
 
   /* =============================== início =============================== */
   aplicar();
-  setTimeout(aplicar, 900);   /* a contagem animada do painel termina reescrevendo o número original */
   if(!estado.abriuGuia){ var hb = $("[data-guia-btn]"); if(hb) hb.classList.add("pulse"); }
   if(!MODO_PRINT && !estado.viuBoasVindas){
     estado.viuBoasVindas = true; gravar();
